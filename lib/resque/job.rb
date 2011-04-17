@@ -79,13 +79,19 @@ module Resque
       destroyed = 0
 
       if args.empty?
-        redis.lrange(queue, 0, -1).each do |string|
+        # redis.lrange(queue, 0, -1).each do |string|
+        #   if decode(string)['class'] == klass
+        #     destroyed += redis.lrem(queue, 0, string).to_i
+        #   end
+        # end
+        redis.smembers(queue).each do |string|
           if decode(string)['class'] == klass
-            destroyed += redis.lrem(queue, 0, string).to_i
+            destroyed += 1 if redis.srem(queue, string)
           end
         end
       else
-        destroyed += redis.lrem(queue, 0, encode(:class => klass, :args => args))
+        #destroyed += redis.lrem(queue, 0, encode(:class => klass, :args => args))
+        destroyed += 1 if redis.srem(queue, encode(:class => klass, :args => args))
       end
 
       destroyed

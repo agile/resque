@@ -18,8 +18,15 @@ context "Resque" do
 
   test "can put jobs on a queue" do
     assert Resque::Job.create(:jobs, 'SomeJob', 20, '/tmp')
-    assert Resque::Job.create(:jobs, 'SomeJob', 20, '/tmp')
+    assert Resque::Job.create(:jobs, 'SomeJob', 21, '/tmp')
   end
+
+  test "only adds unique jobs on a queue" do
+    assert Resque::Job.create(:jobs, 'SomeJob', 20, '/tmp')
+    assert !Resque::Job.create(:jobs, 'SomeJob', 20, '/tmp')
+    assert Resque::Job.create(:jobs, 'SomeJob', 21, '/tmp')
+  end
+
 
   test "can grab jobs off a queue" do
     Resque::Job.create(:jobs, 'some-job', 20, '/tmp')
@@ -44,14 +51,15 @@ context "Resque" do
   test "can put jobs on a queue by way of an ivar" do
     assert_equal 0, Resque.size(:ivar)
     assert Resque.enqueue(SomeIvarJob, 20, '/tmp')
-    assert Resque.enqueue(SomeIvarJob, 20, '/tmp')
+    assert Resque.enqueue(SomeIvarJob, 20, '/tmp/1')
 
     job = Resque.reserve(:ivar)
 
     assert_kind_of Resque::Job, job
     assert_equal SomeIvarJob, job.payload_class
     assert_equal 20, job.args[0]
-    assert_equal '/tmp', job.args[1]
+    # they're popped off in no particular order
+    # assert_equal '/tmp', job.args[1]
 
     assert Resque.reserve(:ivar)
     assert_equal nil, Resque.reserve(:ivar)
@@ -61,13 +69,13 @@ context "Resque" do
     assert_equal 0, Resque.size(:ivar)
     assert Resque.enqueue(SomeIvarJob, 20, '/tmp')
     assert Resque.enqueue(SomeIvarJob, 30, '/tmp')
-    assert Resque.enqueue(SomeIvarJob, 20, '/tmp')
     assert Resque::Job.create(:ivar, 'blah-job', 20, '/tmp')
-    assert Resque.enqueue(SomeIvarJob, 20, '/tmp')
-    assert_equal 5, Resque.size(:ivar)
+    assert Resque.enqueue(SomeIvarJob, 50, '/tmp')
+
+    assert_equal 4, Resque.size(:ivar)
 
     assert Resque.dequeue(SomeIvarJob, 30, '/tmp')
-    assert_equal 4, Resque.size(:ivar)
+    assert_equal 3, Resque.size(:ivar)
     assert Resque.dequeue(SomeIvarJob)
     assert_equal 1, Resque.size(:ivar)
   end
@@ -80,16 +88,17 @@ context "Resque" do
 
   test "jobs can be destroyed" do
     assert Resque::Job.create(:jobs, 'SomeJob', 20, '/tmp')
-    assert Resque::Job.create(:jobs, 'BadJob', 20, '/tmp')
-    assert Resque::Job.create(:jobs, 'SomeJob', 20, '/tmp')
-    assert Resque::Job.create(:jobs, 'BadJob', 30, '/tmp')
-    assert Resque::Job.create(:jobs, 'BadJob', 20, '/tmp')
+    assert Resque::Job.create(:jobs, 'BadJob',  20, '/tmp')
+    assert Resque::Job.create(:jobs, 'BadJob',  30, '/tmp')
+    # dupe jobs get rejected
+    assert !Resque::Job.create(:jobs, 'BadJob',  20, '/tmp')
+    assert !Resque::Job.create(:jobs, 'SomeJob', 20, '/tmp')
 
-    assert_equal 5, Resque.size(:jobs)
-    assert_equal 2, Resque::Job.destroy(:jobs, 'SomeJob')
     assert_equal 3, Resque.size(:jobs)
-    assert_equal 1, Resque::Job.destroy(:jobs, 'BadJob', 30, '/tmp')
+    assert_equal 1, Resque::Job.destroy(:jobs, 'SomeJob')
     assert_equal 2, Resque.size(:jobs)
+    assert_equal 1, Resque::Job.destroy(:jobs, 'BadJob', 30, '/tmp')
+    assert_equal 1, Resque.size(:jobs)
   end
 
   test "jobs can test for equality" do
@@ -109,14 +118,13 @@ context "Resque" do
   test "can put jobs on a queue by way of a method" do
     assert_equal 0, Resque.size(:method)
     assert Resque.enqueue(SomeMethodJob, 20, '/tmp')
-    assert Resque.enqueue(SomeMethodJob, 20, '/tmp')
+    assert Resque.enqueue(SomeMethodJob, 20, '/tmp/1')
 
     job = Resque.reserve(:method)
 
     assert_kind_of Resque::Job, job
     assert_equal SomeMethodJob, job.payload_class
     assert_equal 20, job.args[0]
-    assert_equal '/tmp', job.args[1]
 
     assert Resque.reserve(:method)
     assert_equal nil, Resque.reserve(:method)
@@ -139,34 +147,34 @@ context "Resque" do
   end
 
   test "can pull items off a queue" do
-    assert_equal({ 'name' => 'chris' }, Resque.pop(:people))
-    assert_equal({ 'name' => 'bob' }, Resque.pop(:people))
-    assert_equal({ 'name' => 'mark' }, Resque.pop(:people))
+    assert_not_nil(Resque.pop(:people))
+    assert_not_nil(Resque.pop(:people))
+    assert_not_nil(Resque.pop(:people))
     assert_equal nil, Resque.pop(:people)
   end
 
   test "knows how big a queue is" do
     assert_equal 3, Resque.size(:people)
 
-    assert_equal({ 'name' => 'chris' }, Resque.pop(:people))
+    assert_not_nil(Resque.pop(:people))
     assert_equal 2, Resque.size(:people)
 
-    assert_equal({ 'name' => 'bob' }, Resque.pop(:people))
-    assert_equal({ 'name' => 'mark' }, Resque.pop(:people))
+    assert_not_nil(Resque.pop(:people))
+    assert_not_nil(Resque.pop(:people))
     assert_equal 0, Resque.size(:people)
   end
 
   test "can peek at a queue" do
-    assert_equal({ 'name' => 'chris' }, Resque.peek(:people))
+    assert_equal({ 'name' => 'bob' }, Resque.peek(:people))
     assert_equal 3, Resque.size(:people)
   end
 
   test "can peek multiple items on a queue" do
-    assert_equal({ 'name' => 'bob' }, Resque.peek(:people, 1, 1))
+    assert_equal({ 'name' => 'chris' }, Resque.peek(:people, 1, 1))
 
-    assert_equal([{ 'name' => 'bob' }, { 'name' => 'mark' }], Resque.peek(:people, 1, 2))
-    assert_equal([{ 'name' => 'chris' }, { 'name' => 'bob' }], Resque.peek(:people, 0, 2))
-    assert_equal([{ 'name' => 'chris' }, { 'name' => 'bob' }, { 'name' => 'mark' }], Resque.peek(:people, 0, 3))
+    assert_equal([{ 'name' => 'chris' }, { 'name' => 'mark' }], Resque.peek(:people, 1, 2))
+    assert_equal([{ 'name' => 'bob' }, { 'name' => 'chris' }], Resque.peek(:people, 0, 2))
+    assert_equal([{ 'name' => 'bob' }, { 'name' => 'chris' }, { 'name' => 'mark' }], Resque.peek(:people, 0, 3))
     assert_equal({ 'name' => 'mark' }, Resque.peek(:people, 2, 1))
     assert_equal nil, Resque.peek(:people, 3)
     assert_equal [], Resque.peek(:people, 3, 2)
@@ -204,22 +212,26 @@ context "Resque" do
   test "keeps stats" do
     Resque::Job.create(:jobs, SomeJob, 20, '/tmp')
     Resque::Job.create(:jobs, BadJob)
-    Resque::Job.create(:jobs, GoodJob)
 
-    Resque::Job.create(:others, GoodJob)
     Resque::Job.create(:others, GoodJob)
 
     stats = Resque.info
-    assert_equal 8, stats[:pending]
+    # 3 jobs pushed during the setup, + the 4 unique jobs here
+    assert_equal 6, stats[:pending]
+    assert_equal 0, stats[:failed]
 
     @worker = Resque::Worker.new(:jobs)
     @worker.register_worker
     2.times { @worker.process }
+    assert_equal 2, Resque.info[:processed]
+    assert_equal 1, Resque.info[:failed]
 
+    Resque::Job.create(:jobs, GoodJob)
     job = @worker.reserve
     @worker.working_on job
 
     stats = Resque.info
+    assert_equal 1, stats[:failed]
     assert_equal 1, stats[:working]
     assert_equal 1, stats[:workers]
 

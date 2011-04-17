@@ -4,6 +4,12 @@ $TESTING = true
 require 'test/unit'
 require 'rubygems'
 require 'resque'
+begin
+  require 'ruby-debug'
+  Debugger.start
+rescue LoadError
+  puts "no debug support, install ruby-debug"
+end
 
 begin
   require 'leftright'

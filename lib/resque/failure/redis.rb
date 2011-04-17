@@ -14,14 +14,17 @@ module Resque
           :queue     => queue
         }
         data = Resque.encode(data)
-        Resque.redis.rpush(:failed, data)
+        #Resque.redis.rpush(:failed, data)
+        Resque.redis.zincrby(:failed, 1, data)
       end
 
       def self.count
-        Resque.redis.llen(:failed).to_i
+        # Resque.redis.llen(:failed).to_i
+        Resque.redis.zcard(:failed).to_i
       end
 
       def self.all(start = 0, count = 1)
+        #Resque.list_range(:failed, start, count)
         Resque.list_range(:failed, start, count)
       end
 
@@ -30,16 +33,18 @@ module Resque
       end
 
       def self.requeue(index)
-        item = all(index)
-        item['retried_at'] = Time.now.strftime("%Y/%m/%d %H:%M:%S")
-        Resque.redis.lset(:failed, index, Resque.encode(item))
-        Job.create(item['queue'], item['payload']['class'], *item['payload']['args'])
+        #item = all(index)
+        #item['retried_at'] = Time.now.strftime("%Y/%m/%d %H:%M:%S")
+        #Resque.redis.lset(:failed, index, Resque.encode(item))
+        #Job.create(item['queue'], item['payload']['class'], *item['payload']['args'])
+        false
       end
 
       def self.remove(index)
-        id = rand(0xffffff)
-        Resque.redis.lset(:failed, index, id)
-        Resque.redis.lrem(:failed, 1, id)
+        # id = rand(0xffffff)
+        # Resque.redis.lset(:failed, index, id)
+        # Resque.redis.lrem(:failed, 1, id)
+        false
       end
     end
   end

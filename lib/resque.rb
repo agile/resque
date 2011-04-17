@@ -138,20 +138,23 @@ module Resque
   # item should be any JSON-able Ruby object.
   def push(queue, item)
     watch_queue(queue)
-    redis.rpush "queue:#{queue}", encode(item)
+    #redis.rpush "queue:#{queue}", encode(item)
+    redis.sadd "queue:#{queue}", encode(item)
   end
 
   # Pops a job off a queue. Queue name should be a string.
   #
   # Returns a Ruby object.
   def pop(queue)
-    decode redis.lpop("queue:#{queue}")
+    #decode redis.lpop("queue:#{queue}")
+    decode redis.spop("queue:#{queue}")
   end
 
   # Returns an integer representing the size of a queue.
   # Queue name should be a string.
   def size(queue)
-    redis.llen("queue:#{queue}").to_i
+    #redis.llen("queue:#{queue}").to_i
+    redis.scard("queue:#{queue}").to_i
   end
 
   # Returns an array of items currently queued. Queue name should be
@@ -168,13 +171,36 @@ module Resque
 
   # Does the dirty work of fetching a range of items from a Redis list
   # and converting them into Ruby objects.
-  def list_range(key, start = 0, count = 1)
-    if count == 1
-      decode redis.lindex(key, start)
-    else
-      Array(redis.lrange(key, start, start+count-1)).map do |item|
-        decode item
+  def list_range(key, start = 0, count = 1, with_scores = false)
+    case redis.type(key)
+    when /list/i then
+     if count == 1
+       decode redis.lindex(key, start)
+     else
+       Array(redis.lrange(key, start, start+count-1)).map do |item|
+         decode item
+       end
+     end
+    when /zset/i then
+      args = ["#{redis.namespace}:#{key}", "+inf", "-inf", {:limit => [start.to_i, count.to_i], :with_scores => with_scores}]
+      if with_scores
+        jobs = Hash[ *redis.zrevrangebyscore(*args) ].map {|k,v| [decode(k),v.to_f]}
+      else
+        jobs = redis.zrevrangebyscore(*args).map {|j| decode j }
       end
+      if count == 1
+        jobs = jobs.first
+      end
+      jobs #|| []
+    when /set/i then
+      jobs = redis.sort("#{redis.namespace}:#{key}", :order => "alpha", :limit => [start,count]).map {|j| decode j }
+      if count == 1
+        jobs = jobs.first
+      end
+      jobs
+    else
+      #raise "unhandled type: '#{redis.type(key)}'"
+      []
     end
   end
 

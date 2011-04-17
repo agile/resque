@@ -21,6 +21,7 @@ context "Resque::Worker" do
   test "failed jobs report exception and message" do
     Resque::Job.create(:jobs, BadJobWithSyntaxError)
     @worker.work(0)
+    assert_equal(1, Resque::Failure.count)
     assert_equal('SyntaxError', Resque::Failure.all['exception'])
     assert_equal('Extra Bad job!', Resque::Failure.all['error'])
   end
@@ -40,7 +41,7 @@ context "Resque::Worker" do
   end
 
   test "can peek at failed jobs" do
-    10.times { Resque::Job.create(:jobs, BadJob) }
+    10.times {|i| Resque::Job.create(:jobs, BadJob, i) }
     @worker.work(0)
     assert_equal 10, Resque::Failure.count
 
@@ -56,8 +57,8 @@ context "Resque::Worker" do
   end
 
   test "catches exceptional jobs" do
-    Resque::Job.create(:jobs, BadJob)
-    Resque::Job.create(:jobs, BadJob)
+    Resque::Job.create(:jobs, BadJob, 1)
+    Resque::Job.create(:jobs, BadJob, 2)
     @worker.process
     @worker.process
     @worker.process
@@ -185,8 +186,8 @@ context "Resque::Worker" do
   end
 
   test "keeps track of how many jobs it has processed" do
-    Resque::Job.create(:jobs, BadJob)
-    Resque::Job.create(:jobs, BadJob)
+    Resque::Job.create(:jobs, BadJob, 1)
+    Resque::Job.create(:jobs, BadJob, 2)
 
     3.times do
       job = @worker.reserve
@@ -196,8 +197,8 @@ context "Resque::Worker" do
   end
 
   test "keeps track of how many failures it has seen" do
-    Resque::Job.create(:jobs, BadJob)
-    Resque::Job.create(:jobs, BadJob)
+    Resque::Job.create(:jobs, BadJob, 1)
+    Resque::Job.create(:jobs, BadJob, 2)
 
     3.times do
       job = @worker.reserve
